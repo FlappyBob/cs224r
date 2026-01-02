@@ -206,6 +206,7 @@ class BCTrainer:
         # HINT4: You want each of these collected rollouts to be of length self.params['ep_len']
 
         print("\nCollecting data to be used for training...")
+<<<<<<< Updated upstream
         if itr == 0: 
             with open(load_initial_expertdata, 'rb') as f:
                 paths = pickle.load(f)
@@ -218,6 +219,32 @@ class BCTrainer:
                 self.params['ep_len']
             )
         
+=======
+        
+        # 判断是第一次迭代还是后续迭代
+        if itr == 0:
+            # 第一次迭代：加载专家数据
+            # Behavior Cloning 使用预收集的专家数据作为训练集
+            # 这些数据包含了专家策略在环境中的轨迹（观测-动作对）
+            print(f"Loading expert data from {load_initial_expertdata}")
+            with open(load_initial_expertdata, 'rb') as f:
+                paths = pickle.load(f)
+            
+            # 计算总的环境步数（用于日志记录）
+            # 每个 path 是一个字典，包含 "reward" 数组，其长度就是该轨迹的步数
+            envsteps_this_batch = sum([len(path["reward"]) for path in paths])
+        else:
+            # 后续迭代（主要用于 DAgger）：
+            # 使用当前训练的策略（collect_policy）在环境中收集新的轨迹
+            # 这样可以收集到当前策略可能犯错的区域的数据
+            # batch_size 指定要收集的总步数，ep_len 是每个轨迹的最大长度
+            paths, envsteps_this_batch = utils.sample_trajectories(
+                self.env, 
+                collect_policy, 
+                self.params['batch_size'],  # 要收集的总步数
+                self.params['ep_len']       # 每个轨迹的最大长度
+            )
+>>>>>>> Stashed changes
 
         # collect more rollouts with the same policy, to be saved as videos in tensorboard
         # note: here, we collect MAX_NVIDEO rollouts, each of length MAX_VIDEO_LEN
@@ -236,8 +263,12 @@ class BCTrainer:
         """
         print('\nTraining agent using sampled data from replay buffer...')
         all_logs = []
+        
+        # 每个迭代中，我们进行多次梯度更新
+        # num_agent_train_steps_per_iter 指定了每个迭代要更新多少次
         for train_step in range(self.params['num_agent_train_steps_per_iter']):
 
+<<<<<<< Updated upstream
             # TODO sample some data from the data buffer
             # HINT1: use the agent's sample function
             # HINT2: how much data = self.params['train_batch_size']
@@ -247,8 +278,29 @@ class BCTrainer:
             # TODO use the sampled data to train an agent
             # HINT: use the agent's train function
             # HINT: keep the agent's training log for debugging
+=======
+            # 从经验回放缓冲区中随机采样一个批次的数据
+            # 这是 Behavior Cloning 的核心：从专家数据中学习
+            # agent.sample() 返回：
+            #   - ob_batch: 观测批次 (batch_size x obs_dim)
+            #   - ac_batch: 动作批次 (batch_size x ac_dim) - 这是专家动作，作为监督学习的标签
+            #   - re_batch: 奖励批次（BC中不使用）
+            #   - next_ob_batch: 下一个观测批次（BC中不使用）
+            #   - terminal_batch: 终止标志批次（BC中不使用）
+            ob_batch, ac_batch, re_batch, next_ob_batch, terminal_batch = \
+                self.agent.sample(self.params['train_batch_size'])
+
+            # 使用采样的数据训练 Agent
+            # Behavior Cloning 是监督学习：
+            #   输入：观测 (ob_batch)
+            #   输出：预测的动作
+            #   标签：专家的真实动作 (ac_batch)
+            #   损失：预测动作与专家动作之间的差异（通常是 MSE）
+            # agent.train() 会调用策略网络的 update() 方法，执行反向传播和参数更新
+>>>>>>> Stashed changes
             train_log = self.agent.train(ob_batch, ac_batch)
             all_logs.append(train_log)
+        
         return all_logs
 
     def do_relabel_with_expert(self, expert_policy, paths):
@@ -261,6 +313,7 @@ class BCTrainer:
         expert_policy.to(ptu.device)
         print("\nRelabelling collected observations with labels from an expert policy...")
 
+<<<<<<< Updated upstream
         # TODO relabel collected obsevations (from our policy) with labels from an expert policy
         # HINT: query the policy (using the get_action function) with paths[i]["observation"]
         # and replace paths[i]["action"] with these expert labels
@@ -279,6 +332,37 @@ class BCTrainer:
             
             # Replace the actions in the path with expert actions
             path["action"] = np.array(expert_actions, dtype=np.float32)
+=======
+        # DAgger 算法的核心步骤：重新标注
+        # 
+        # 问题背景：
+        #   - 当前策略收集的轨迹中，动作可能不是最优的
+        #   - 如果直接用这些"错误"的动作训练，会强化错误行为
+        # 
+        # DAgger 的解决方案：
+        #   1. 用当前策略收集轨迹（获得真实的观测分布）
+        #   2. 用专家策略为这些观测生成正确的动作标签
+        #   3. 用重新标注的数据训练，这样既学到了真实分布，又学到了正确动作
+        #
+        # 这样做的优势：
+        #   - 避免了分布偏移（distribution shift）问题
+        #   - 训练数据来自当前策略的分布，但标签来自专家
+        #   - 可以逐步纠正策略的错误
+        
+        # 遍历所有收集的轨迹
+        for path in paths:
+            # 获取该轨迹中的所有观测
+            observations = path["observation"]  # shape: (trajectory_length, obs_dim)
+            
+            # 用专家策略为每个观测生成动作
+            # expert_policy.get_action() 可以处理单个观测或批量观测
+            # 返回的动作 shape: (trajectory_length, ac_dim)
+            expert_actions = expert_policy.get_action(observations)
+            
+            # 替换原来的动作（当前策略的动作）为专家动作
+            # 这样我们就有了：当前策略的观测分布 + 专家的正确动作
+            path["action"] = expert_actions
+>>>>>>> Stashed changes
         
         return paths
 

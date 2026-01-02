@@ -37,6 +37,14 @@ B. Install on system Python:
 
 ## Troubleshooting 
 
+If you encounter the error `CondaError: Run 'conda init' before 'conda activate'`, you need to initialize conda in your current shell session. Run:
+```
+source /root/miniconda3/etc/profile.d/conda.sh
+```
+(Replace `/root/miniconda3` with your conda installation path if different). Then you can run `conda activate cs224r`.
+
+Alternatively, you can run `conda init bash` and then either source your `.bashrc` file or open a new terminal.
+
 If you are encountering errors in `pip install -r requirements.txt` involving `Error building wheels...`, you may need to manually install conda dependencies. For example, if there is a problem with swig install, you might want to do `conda install -c conda-forge swig` to resolve this. If you can't find the version number, make sure you are using the correct version of Python (3.11, as above).
 
 You may encounter the following GLFW errors if running on machine without a display:
