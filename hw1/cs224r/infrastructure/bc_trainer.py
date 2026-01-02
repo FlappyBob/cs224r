@@ -206,20 +206,6 @@ class BCTrainer:
         # HINT4: You want each of these collected rollouts to be of length self.params['ep_len']
 
         print("\nCollecting data to be used for training...")
-<<<<<<< Updated upstream
-        if itr == 0: 
-            with open(load_initial_expertdata, 'rb') as f:
-                paths = pickle.load(f)
-            envsteps_this_batch = sum(utils.get_pathlength(path) for path in paths)
-        else:
-            paths, envsteps_this_batch = utils.sample_trajectories(
-                self.env,
-                collect_policy, 
-                self.params['batch_size'], 
-                self.params['ep_len']
-            )
-        
-=======
         
         # 判断是第一次迭代还是后续迭代
         if itr == 0:
@@ -244,7 +230,6 @@ class BCTrainer:
                 self.params['batch_size'],  # 要收集的总步数
                 self.params['ep_len']       # 每个轨迹的最大长度
             )
->>>>>>> Stashed changes
 
         # collect more rollouts with the same policy, to be saved as videos in tensorboard
         # note: here, we collect MAX_NVIDEO rollouts, each of length MAX_VIDEO_LEN
@@ -268,17 +253,6 @@ class BCTrainer:
         # num_agent_train_steps_per_iter 指定了每个迭代要更新多少次
         for train_step in range(self.params['num_agent_train_steps_per_iter']):
 
-<<<<<<< Updated upstream
-            # TODO sample some data from the data buffer
-            # HINT1: use the agent's sample function
-            # HINT2: how much data = self.params['train_batch_size']
-            ob_batch, ac_batch, re_batch, next_ob_batch, terminal_batch = \
-                self.agent.sample(self.params['train_batch_size'])
-
-            # TODO use the sampled data to train an agent
-            # HINT: use the agent's train function
-            # HINT: keep the agent's training log for debugging
-=======
             # 从经验回放缓冲区中随机采样一个批次的数据
             # 这是 Behavior Cloning 的核心：从专家数据中学习
             # agent.sample() 返回：
@@ -297,7 +271,6 @@ class BCTrainer:
             #   标签：专家的真实动作 (ac_batch)
             #   损失：预测动作与专家动作之间的差异（通常是 MSE）
             # agent.train() 会调用策略网络的 update() 方法，执行反向传播和参数更新
->>>>>>> Stashed changes
             train_log = self.agent.train(ob_batch, ac_batch)
             all_logs.append(train_log)
         
@@ -313,26 +286,6 @@ class BCTrainer:
         expert_policy.to(ptu.device)
         print("\nRelabelling collected observations with labels from an expert policy...")
 
-<<<<<<< Updated upstream
-        # TODO relabel collected obsevations (from our policy) with labels from an expert policy
-        # HINT: query the policy (using the get_action function) with paths[i]["observation"]
-        # and replace paths[i]["action"] with these expert labels
-        
-        # Iterate through each path
-        for path in paths:
-            # Get observations from the path
-            observations = path["observation"]  # shape: (path_length, obs_dim)
-            
-            # Get expert actions for all observations in this path
-            expert_actions = []
-            for obs in observations:
-                # Query expert policy for action given this observation
-                expert_action = expert_policy.get_action(obs)
-                expert_actions.append(expert_action)
-            
-            # Replace the actions in the path with expert actions
-            path["action"] = np.array(expert_actions, dtype=np.float32)
-=======
         # DAgger 算法的核心步骤：重新标注
         # 
         # 问题背景：
@@ -362,7 +315,6 @@ class BCTrainer:
             # 替换原来的动作（当前策略的动作）为专家动作
             # 这样我们就有了：当前策略的观测分布 + 专家的正确动作
             path["action"] = expert_actions
->>>>>>> Stashed changes
         
         return paths
 
