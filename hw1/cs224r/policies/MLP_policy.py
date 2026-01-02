@@ -74,7 +74,6 @@ class MLPPolicySL(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         )
         self.mean_net.to(ptu.device)
         self.logstd = nn.Parameter(
-
             torch.zeros(self.ac_dim, dtype=torch.float32, device=ptu.device)
         )
         self.logstd.to(ptu.device)
@@ -104,8 +103,23 @@ class MLPPolicySL(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         else:
             observation = obs[None]
 
-        # TODO return the action that the policy prescribes
-        raise NotImplementedError
+        # Convert numpy array to torch tensor
+        observation = ptu.from_numpy(observation.astype(np.float32))
+        
+        # Get action distribution from forward pass
+        action_dist = self.forward(observation)
+        
+        # Sample action from the distribution
+        action = action_dist.sample()
+        
+        # Convert back to numpy
+        action = ptu.to_numpy(action)
+        
+        # Remove batch dimension if input was single observation
+        if len(obs.shape) == 1:
+            action = action[0]
+        
+        return action
 
     def forward(self, observation: torch.FloatTensor) -> Any:
         """
@@ -121,7 +135,18 @@ class MLPPolicySL(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         # return more flexible objects, such as a
         # `torch.distributions.Distribution` object. It's up to you!
         
-        raise NotImplementedError
+        # Get mean from the neural network
+        mean = self.mean_net(observation)  # shape: (batch_size, ac_dim)
+        
+        # Get standard deviation from logstd parameter
+        std = torch.exp(self.logstd)  # shape: (ac_dim,)
+        # Expand to match batch dimension
+        std = std.expand_as(mean)  # shape: (batch_size, ac_dim)
+        
+        # Create and return a Normal distribution
+        action_dist = distributions.Normal(mean, std)
+        
+        return action_dist
 
     def update(self, observations, actions):
         """
@@ -134,8 +159,23 @@ class MLPPolicySL(BasePolicy, nn.Module, metaclass=abc.ABCMeta):
         """
         # TODO: update the policy and return the loss. Recall that to update the policy
         # you need to backpropagate the gradient and step the optimizer.
-        loss = TODO
-
+        
+        # Convert numpy arrays to torch tensors
+        obs_tensor = ptu.from_numpy(observations.astype(np.float32))
+        ac_tensor = ptu.from_numpy(actions.astype(np.float32))
+        
+        # Forward pass to get action distribution
+        action_dist = self.forward(obs_tensor)
+        
+        # Compute negative log likelihood loss
+        # This measures how well the expert actions fit our policy distribution
+        loss = -action_dist.log_prob(ac_tensor).mean()
+        
+        # Backward pass and optimization
+        self.optimizer.zero_grad()  # Clear gradients
+        loss.backward()             # Compute gradients
+        self.optimizer.step()       # Update parameters
+        
         return {
             'Training Loss': ptu.to_numpy(loss),
         }
