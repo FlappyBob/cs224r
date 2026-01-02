@@ -264,8 +264,23 @@ class BCTrainer:
         # TODO relabel collected obsevations (from our policy) with labels from an expert policy
         # HINT: query the policy (using the get_action function) with paths[i]["observation"]
         # and replace paths[i]["action"] with these expert labels
-
-        raise NotImplementedError
+        
+        # Iterate through each path
+        for path in paths:
+            # Get observations from the path
+            observations = path["observation"]  # shape: (path_length, obs_dim)
+            
+            # Get expert actions for all observations in this path
+            expert_actions = []
+            for obs in observations:
+                # Query expert policy for action given this observation
+                expert_action = expert_policy.get_action(obs)
+                expert_actions.append(expert_action)
+            
+            # Replace the actions in the path with expert actions
+            path["action"] = np.array(expert_actions, dtype=np.float32)
+        
+        return paths
 
     ####################################
     ####################################
