@@ -16,6 +16,8 @@ MJ_ENV_NAMES = ["Ant-v4", "Walker2d-v4", "HalfCheetah-v4", "Hopper-v4"]
 MJ_ENV_KWARGS = {name: {"render_mode": "rgb_array"} for name in MJ_ENV_NAMES}
 MJ_ENV_KWARGS["Ant-v4"]["use_contact_forces"] = True
 
+############################################
+############################################
 def sample_trajectory(env, policy, max_path_length, render=False):
     """
     Rolls out a policy and generates a trajectories
@@ -46,7 +48,9 @@ def sample_trajectory(env, policy, max_path_length, render=False):
         # Use the most recent observation to decide what to do
         obs.append(ob)
         ac = policy.get_action(ob) # HINT: Query the policy's get_action function
-        ac = ac[0]
+        # Handle both cases: if action has batch dimension, remove it
+        if len(ac.shape) > 1:
+            ac = ac[0]
         acs.append(ac)
 
         # Take that action and record results

@@ -218,7 +218,7 @@ class BCTrainer:
             
             # 计算总的环境步数（用于日志记录）
             # 每个 path 是一个字典，包含 "reward" 数组，其长度就是该轨迹的步数
-            envsteps_this_batch = sum([len(path["reward"]) for path in paths])
+            envsteps_this_batch = sum(utils.get_pathlength(path) for path in paths)
         else:
             # 后续迭代（主要用于 DAgger）：
             # 使用当前训练的策略（collect_policy）在环境中收集新的轨迹
@@ -252,25 +252,8 @@ class BCTrainer:
         # 每个迭代中，我们进行多次梯度更新
         # num_agent_train_steps_per_iter 指定了每个迭代要更新多少次
         for train_step in range(self.params['num_agent_train_steps_per_iter']):
-
-            # 从经验回放缓冲区中随机采样一个批次的数据
-            # 这是 Behavior Cloning 的核心：从专家数据中学习
-            # agent.sample() 返回：
-            #   - ob_batch: 观测批次 (batch_size x obs_dim)
-            #   - ac_batch: 动作批次 (batch_size x ac_dim) - 这是专家动作，作为监督学习的标签
-            #   - re_batch: 奖励批次（BC中不使用）
-            #   - next_ob_batch: 下一个观测批次（BC中不使用）
-            #   - terminal_batch: 终止标志批次（BC中不使用）
             ob_batch, ac_batch, re_batch, next_ob_batch, terminal_batch = \
                 self.agent.sample(self.params['train_batch_size'])
-
-            # 使用采样的数据训练 Agent
-            # Behavior Cloning 是监督学习：
-            #   输入：观测 (ob_batch)
-            #   输出：预测的动作
-            #   标签：专家的真实动作 (ac_batch)
-            #   损失：预测动作与专家动作之间的差异（通常是 MSE）
-            # agent.train() 会调用策略网络的 update() 方法，执行反向传播和参数更新
             train_log = self.agent.train(ob_batch, ac_batch)
             all_logs.append(train_log)
         
@@ -286,25 +269,7 @@ class BCTrainer:
         expert_policy.to(ptu.device)
         print("\nRelabelling collected observations with labels from an expert policy...")
 
-        # DAgger 算法的核心步骤：重新标注
-        # 
-        # 问题背景：
-        #   - 当前策略收集的轨迹中，动作可能不是最优的
-        #   - 如果直接用这些"错误"的动作训练，会强化错误行为
-        # 
-        # DAgger 的解决方案：
-        #   1. 用当前策略收集轨迹（获得真实的观测分布）
-        #   2. 用专家策略为这些观测生成正确的动作标签
-        #   3. 用重新标注的数据训练，这样既学到了真实分布，又学到了正确动作
-        #
-        # 这样做的优势：
-        #   - 避免了分布偏移（distribution shift）问题
-        #   - 训练数据来自当前策略的分布，但标签来自专家
-        #   - 可以逐步纠正策略的错误
-        
-        # 遍历所有收集的轨迹
         for path in paths:
-            # 获取该轨迹中的所有观测
             observations = path["observation"]  # shape: (trajectory_length, obs_dim)
             
             # 用专家策略为每个观测生成动作
